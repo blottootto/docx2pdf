@@ -13,14 +13,19 @@ except ImportError:
 __version__ = version(__package__)
 
 
-def windows(paths, keep_active):
+def windows(paths, keep_active, recursive=False):
     import win32com.client
 
     word = win32com.client.Dispatch("Word.Application")
     wdFormatPDF = 17
 
     if paths["batch"]:
-        for docx_filepath in tqdm(sorted(Path(paths["input"]).glob("[!~]*.doc*"))):
+        if recursive:
+            docx_files = sorted(Path(paths["input"]).rglob("[!~]*.doc*"))  # Search recursively
+        else:
+            docx_files = sorted(Path(paths["input"]).glob("[!~]*.doc*"))  # Non-recursive
+
+        for docx_filepath in tqdm(docx_files):
             pdf_filepath = Path(paths["output"]) / (str(docx_filepath.stem) + ".pdf")
             doc = word.Documents.Open(str(docx_filepath))
             try:
@@ -106,12 +111,12 @@ def resolve_paths(input_path, output_path):
     return output
 
 
-def convert(input_path, output_path=None, keep_active=False):
+def convert(input_path, output_path=None, keep_active=False, recursive=False):
     paths = resolve_paths(input_path, output_path)
     if sys.platform == "darwin":
-        return macos(paths, keep_active)
+        return macos(paths, keep_active, recursive)
     elif sys.platform == "win32":
-        return windows(paths, keep_active)
+        return windows(paths, keep_active, recursive)
     else:
         raise NotImplementedError(
             "docx2pdf is not implemented for linux as it requires Microsoft Word to be installed"
@@ -119,7 +124,6 @@ def convert(input_path, output_path=None, keep_active=False):
 
 
 def cli():
-
     import textwrap
     import argparse
 
@@ -145,6 +149,9 @@ def cli():
 
     Batch convert docx folder. Output PDFs will go to a different explicit folder:
         docx2pdf input_dir/ output_dir/
+
+    Recursively convert files in all subfolders:
+        docx2pdf input_dir/ output_dir/ --recursive
     """
     )
 
@@ -166,6 +173,12 @@ def cli():
         help="prevent closing word after conversion",
     )
     parser.add_argument(
+        "--recursive", "-r",
+        action="store_true",
+        default=False,
+        help="convert files in all subfolders recursively"
+    )
+    parser.add_argument(
         "--version", action="store_true", default=False, help="display version and exit"
     )
 
@@ -175,4 +188,4 @@ def cli():
     else:
         args = parser.parse_args()
 
-    convert(args.input, args.output, args.keep_active)
+    convert(args.input, args.output, args.keep_active, args.recursive)
